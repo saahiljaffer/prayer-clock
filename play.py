@@ -3,14 +3,14 @@
 import requests
 import json
 
-url = 'http://localhost/broadcast'
+url = 'http://192.168.0.2:3000/assistant'
 
 body = {
-    "command": "hello world",
+    "command": "Prayer Time!",
     "broadcast": 1,
-    "user": "saahil"
+    "user": "saahil" 
 }
 
-response = requests.post(url, json.dumps(body))
+response = requests.post(url, body)
 
 print(response)

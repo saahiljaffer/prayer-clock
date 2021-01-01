@@ -69,8 +69,8 @@ isDst = time.localtime().tm_isdst
 print(isDst)
 
 now = datetime.datetime.now()
-strPlayAzaanMP3Command = 'python {}/play.py >> {}/adhan.log 2>&1'.format(root_dir, root_dir)
-strUpdateCommand = 'python {}/main.py >> {}/adhan.log 2>&1'.format(root_dir, root_dir)
+strPlayAzaanMP3Command = 'catt cast {}/azan.webm >> {}/adhan.log 2>&1'.format(root_dir, root_dir)
+strUpdateCommand = 'python3 {}/main.py >> {}/adhan.log 2>&1'.format(root_dir, root_dir)
 strClearLogsCommand = 'truncate -s 0 {}/adhan.log 2>&1'.format(root_dir)
 strJobComment = 'rpiAdhanClockJob'
 
