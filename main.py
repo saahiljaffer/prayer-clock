@@ -10,7 +10,6 @@
 # else:
 #     est_hour -= 5
 
-# https://github.com/achaudhry/adhan
 
 #!/usr/bin/python3
 
