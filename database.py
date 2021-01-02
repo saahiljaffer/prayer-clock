@@ -2,7 +2,7 @@
 
 import sqlite3
 import datetime
-import pytz
+# import pytz
 from datetime import timedelta
 
 conn = sqlite3.connect('prayertimes.db')
@@ -20,7 +20,7 @@ for month in range(1, 13):
             cursor = conn.execute(command)
             hour = timedelta(hours=+12)
             for row in cursor:
-                date_time_obj = datetime.datetime.strptime(row[0], '%I:%M')
+                date_time_obj = datetime.datetime.strptime(row[0], '%H:%M')
                 date_time_obj = date_time_obj + hour
                 new_time = date_time_obj.strftime('%H:%M')
                 updateCommand = "UPDATE times SET " + prayer + " = '" + new_time + "' WHERE month = " + str(mt) + " AND day = " + str(dt)

@@ -20,7 +20,6 @@ from os.path import dirname, abspath, join as pathjoin
 import argparse
 import sqlite3
 
-
 root_dir = dirname(abspath(__file__))
 sys.path.insert(0, pathjoin(root_dir, 'crontab'))
 
@@ -34,10 +33,12 @@ system_cron = CronTab(user='saahiljaffer')
 def addAzaanTime (strPrayerName, strPrayerTime, objCronTab, strCommand):
   job = objCronTab.new(command=strCommand,comment=strPrayerName)  
   timeArr = strPrayerTime.split(':')
-  hour = timeArr[0]
-  min = timeArr[1]
-  job.minute.on(int(min))
-  job.hour.on(int(hour))
+  hour = int(timeArr[0])
+  min = int(timeArr[1])
+  if(time.localtime().tm_isdst):
+    hour = hour + 1
+  job.minute.on(min)
+  job.hour.on(hour)
   job.set_comment(strJobComment)
   print(job)
   return
@@ -65,11 +66,9 @@ def addClearLogsCronJob (objCronTab, strCommand):
 #Set calculation method, utcOffset and dst here
 #By default system timezone will be used
 #--------------------
-isDst = time.localtime().tm_isdst
-print(isDst)
 
 now = datetime.datetime.now()
-strPlayAzaanMP3Command = 'catt cast {}/azan.webm >> {}/adhan.log 2>&1'.format(root_dir, root_dir)
+strPlayAzaanMP3Command = '/usr/local/bin/catt cast {}/azan.webm >> {}/adhan.log 2>&1'.format(root_dir, root_dir)
 strUpdateCommand = 'python3 {}/main.py >> {}/adhan.log 2>&1'.format(root_dir, root_dir)
 strClearLogsCommand = 'truncate -s 0 {}/adhan.log 2>&1'.format(root_dir)
 strJobComment = 'rpiAdhanClockJob'
@@ -83,7 +82,6 @@ print ("Opened database successfully")
 prayers = ["fajr", "zuhr", "maghrib"]
 command = "SELECT fajr, zuhr, maghrib from times WHERE month = " + str(now.month) + " AND day = " + str(now.day)
 todaysTimes = conn.execute(command).fetchone()
-# hour = timedelta(hours=+1)
 print(todaysTimes)           
 conn.close()
 
