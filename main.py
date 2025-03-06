@@ -1,100 +1,86 @@
-# // SELECT * from times WHERE month == 3 AND day >= 10 OR month > 3 AND month < 11;
-
-# how to check if dst
-# target_date = datetime.datetime.strptime(arg_date, "%Y-%m-%d")
-# time_zone = pytz.timezone('US/Eastern')
-# dst_date = time_zone.localize(target_date, is_dst=None)
-# est_hour = 24
-# if bool(dst_date.dst()) is True:
-#     est_hour -= 4
-# else:
-#     est_hour -= 5
-
-
-#!/usr/bin/python3
-
-import datetime
+import schedule
 import time
-import sys
-from os.path import dirname, abspath, join as pathjoin
-import argparse
+import datetime
 import sqlite3
+import pytz
+import subprocess
 
-root_dir = dirname(abspath(__file__))
-sys.path.insert(0, pathjoin(root_dir, 'crontab'))
+# Constants
+DB_FILE = "prayertimes.db"
+TIMEZONE = "US/Eastern"
+SOUND_FILE = "azan.webm"  # Ensure this is in the correct location
+LOG_FILE = "adhan.log"
+CHROMECAST_DEVICE = "10.0.0.30"  # Change this to your Chromecast device name
 
-from crontab import CronTab
-system_cron = CronTab(user='saahiljaffer')
 
-#HELPER FUNCTIONS
-#---------------------------------
-#---------------------------------
+def get_prayer_times():
+    """Fetch prayer times from SQLite and adjust for DST"""
+    now = datetime.datetime.now()
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
 
-def addAzaanTime (strPrayerName, strPrayerTime, objCronTab, strCommand):
-  job = objCronTab.new(command=strCommand,comment=strPrayerName)  
-  timeArr = strPrayerTime.split(':')
-  hour = int(timeArr[0])
-  min = int(timeArr[1])
-  if(time.localtime().tm_isdst):
-    hour = hour + 1
-  job.minute.on(min)
-  job.hour.on(hour)
-  job.set_comment(strJobComment)
-  print(job)
-  return
+    query = f"SELECT maghrib FROM times WHERE month = {now.month} AND day = {now.day}"
+    result = cursor.execute(query).fetchone()
+    conn.close()
 
-def addUpdateCronJob (objCronTab, strCommand):
-  job = objCronTab.new(command=strCommand)
-  job.minute.on(15)
-  job.hour.on(3)
-  job.set_comment(strJobComment)
-  print(job)
-  return
+    if not result:
+        print(f"No prayer times found for {now.month}-{now.day}.")
+        return []
 
-def addClearLogsCronJob (objCronTab, strCommand):
-  job = objCronTab.new(command=strCommand)
-  job.day.on(1)
-  job.minute.on(0)
-  job.hour.on(0)
-  job.set_comment(strJobComment)
-  print(job)
-  return
-#---------------------------------
-#---------------------------------
-#HELPER FUNCTIONS END
+    # Convert prayer times to local time with DST adjustment
+    local_tz = pytz.timezone(TIMEZONE)
+    today_date = datetime.datetime(now.year, now.month, now.day)
+    dst_check = local_tz.localize(today_date, is_dst=None).dst() != datetime.timedelta(
+        0
+    )
+    offset = -1 if dst_check else 0
 
-#Set calculation method, utcOffset and dst here
-#By default system timezone will be used
-#--------------------
+    def adjust_time(prayer_time):
+        hour, minute = map(int, prayer_time.split(":"))
+        return f"{hour - offset:02d}:{minute:02d}"
 
-now = datetime.datetime.now()
-strPlayAzaanMP3Command = '/usr/local/bin/catt cast {}/azan.webm >> {}/adhan.log 2>&1'.format(root_dir, root_dir)
-strUpdateCommand = 'python3 {}/main.py >> {}/adhan.log 2>&1'.format(root_dir, root_dir)
-strClearLogsCommand = 'truncate -s 0 {}/adhan.log 2>&1'.format(root_dir)
-strJobComment = 'rpiAdhanClockJob'
+    adjusted_times = [adjust_time(time) for time in result]
+    print(f"Fetched prayer times: {adjusted_times}")
+    return adjusted_times
 
-# Remove existing jobs created by this script
-system_cron.remove_all(comment=strJobComment)
 
-# Calculate prayer times
-conn = sqlite3.connect('prayertimes.db')
-print ("Opened database successfully")
-prayers = ["fajr", "zuhr", "maghrib"]
-command = "SELECT fajr, zuhr, maghrib from times WHERE month = " + str(now.month) + " AND day = " + str(now.day)
-todaysTimes = conn.execute(command).fetchone()
-print(todaysTimes)           
-conn.close()
+def play_adhan():
+    """Plays the Adhan sound using catt (Chromecast)"""
+    try:
+        command = ["catt", "-d", CHROMECAST_DEVICE, "cast", SOUND_FILE]
+        subprocess.run(command, check=True)
+        print(
+            f"Played Adhan on {CHROMECAST_DEVICE} at {datetime.datetime.now().strftime('%H:%M:%S')}"
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Error playing Adhan: {e}")
 
-# Add times to crontab
-addAzaanTime('fajr',todaysTimes[0],system_cron,strPlayAzaanMP3Command)
-addAzaanTime('dhuhr',todaysTimes[1],system_cron,strPlayAzaanMP3Command)
-addAzaanTime('maghrib',todaysTimes[2],system_cron,strPlayAzaanMP3Command)
 
-# Run this script again overnight
-addUpdateCronJob(system_cron, strUpdateCommand)
+def reschedule_jobs():
+    """Reschedules jobs with updated prayer times"""
+    schedule.clear()
+    prayer_times = get_prayer_times()
 
-# Clear the logs every month
-addClearLogsCronJob(system_cron,strClearLogsCommand)
+    if not prayer_times:
+        return
 
-system_cron.write_to_user(user='saahiljaffer')
-print('Script execution finished at: ' + str(now))
+    # Schedule Adhan at each prayer time
+    schedule.every().day.at(prayer_times[0]).do(play_adhan)
+    # schedule.every().day.at(prayer_times[1]).do(play_adhan)
+    # schedule.every().day.at(prayer_times[2]).do(play_adhan)
+
+    # Schedule re-fetch of times at 2:00 AM
+    schedule.every().day.at("02:00").do(reschedule_jobs)
+
+    print(f"Scheduled Adhan at: {prayer_times}")
+
+
+def main():
+    reschedule_jobs()
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+
+if __name__ == "__main__":
+    main()
