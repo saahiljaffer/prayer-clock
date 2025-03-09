@@ -1,7 +1,0 @@
-services:
-  prayer-clock:
-    image: ghcr.io/saahiljaffer/prayer-clock:latest
-    restart: always
-    network_mode: "host" # Required for Chromecast to work
-    environment:
-      - TZ=America/New_York # Set the correct timezone
